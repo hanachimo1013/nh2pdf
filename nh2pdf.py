@@ -169,7 +169,13 @@ class Nhentai2PDF:
             pdf.save(final_filename, linearize=True)
         
         shutil.rmtree(temp_path)
-        print(f"\n[!] Mission accomplished. [{data['language']}] Archive completed. 😏")
+        print("=" * 60)
+        print(f"  TARGET   : {data['title']}")
+        print(f"  ARTIST   : {data['artist']}")
+        print(f"  LANGUAGE : {data['language']}")
+        print(f"  VOLUME   : {data['total_pages']} Pages")
+        print("=" * 60)
+        print(f"\n[!] Compile success. [{data['title']}] in [{data['language']}] Archive completed. 😏")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
