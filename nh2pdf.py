@@ -57,8 +57,19 @@ class Nhentai2PDF:
         
         artist_tag = soup.find('a', href=re.compile(r'/artist/'))
         artist_name = artist_tag.find('span', class_='name').text if artist_tag else "Unknown"
+        
+        # Comprehensive Tag and Language Extraction
         tags = [t.find('span', class_='name').text for t in soup.find_all('a', href=re.compile(r'/tag/'))]
         
+        # Specifically target the language category
+        lang_tags = [t.find('span', class_='name').text for t in soup.find_all('a', href=re.compile(r'/language/'))]
+        # Filter out 'translated' to find the actual language (English, Japanese, etc.)
+        detected_lang = "Unknown"
+        for l in lang_tags:
+            if l.lower() != "translated":
+                detected_lang = l.capitalize()
+                break
+
         return {
             "title": title,
             "safe_title": self._sanitize(title),
@@ -66,6 +77,7 @@ class Nhentai2PDF:
             "total_pages": total_pages,
             "artist": artist_name,
             "tags": tags,
+            "language": detected_lang,
             "url": url
         }
 
@@ -90,9 +102,10 @@ class Nhentai2PDF:
         data = self.fetch_metadata(code)
         
         print("=" * 60)
-        print(f"  TARGET : {data['title']}")
-        print(f"  ARTIST : {data['artist']}")
-        print(f"  VOLUME : {data['total_pages']} Pages")
+        print(f"  TARGET   : {data['title']}")
+        print(f"  ARTIST   : {data['artist']}")
+        print(f"  LANGUAGE : {data['language']}")
+        print(f"  VOLUME   : {data['total_pages']} Pages")
         print("=" * 60)
         
         confirm = input(f"Compile this entry? (y/n): ").lower()
@@ -114,7 +127,9 @@ class Nhentai2PDF:
             shutil.rmtree(temp_path)
             return
 
-        final_filename = os.path.join(self.output_dir, f"{code}_{data['safe_title']}.pdf")
+        # Filename now includes Language for quick OS-level sorting
+        final_filename = os.path.join(self.output_dir, f"{code}_[{data['language']}]_{data['safe_title']}.pdf")
+        
         img_files = [os.path.join(temp_path, f) for f in sorted(os.listdir(temp_path)) 
                      if f.lower().endswith(('.jpg', '.png', '.webp', '.gif'))]
 
@@ -132,27 +147,29 @@ class Nhentai2PDF:
             processed_pages.append(canvas)
 
         print(f"[*] Compiling & Linearizing (Quality: 90)...")
-        # Step 1: Save with Pillow
         processed_pages[0].save(
             final_filename, 
             save_all=True, 
             append_images=processed_pages[1:], 
             resolution=100.0, 
-            quality=90  # Set to 90 as requested
+            quality=90
         )
         
-        # Step 2: Linearization and Metadata Injection
+        # Refined Metadata Injection with pikepdf
         with pikepdf.open(final_filename, allow_overwriting_input=True) as pdf:
             with pdf.open_metadata() as meta:
-                meta['dc:title'] = data['title']
+                # Displays Language in the PDF Viewer Title Bar
+                meta['dc:title'] = f"{data['title']} [{data['language']}]"
                 meta['dc:creator'] = [data['artist']]
                 meta['dc:subject'] = data['tags']
+                # Standard XMP field for language-based filtering
+                meta['dc:language'] = [data['language'].lower()]
             
-            # This enables "Fast Web View" for FIFO loading
+            # Linearize enables Fast Web View (FIFO loading)
             pdf.save(final_filename, linearize=True)
         
         shutil.rmtree(temp_path)
-        print(f"\n[!] Mission accomplished. High-fidelity archive completed. 😏")
+        print(f"\n[!] Mission accomplished. [{data['language']}] Archive completed. 😏")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
