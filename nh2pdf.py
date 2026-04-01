@@ -166,7 +166,7 @@ class Nhentai2PDF:
                 meta['dc:language'] = [data['language'].lower()]
             
             # Linearize enables Fast Web View (FIFO loading)
-            pdf.save`(final_filename, linearize=True)
+            pdf.save(final_filename, linearize=True)
         
         shutil.rmtree(temp_path)
         print("=" * 60)
