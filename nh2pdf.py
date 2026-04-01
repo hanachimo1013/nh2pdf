@@ -128,7 +128,7 @@ class Nhentai2PDF:
             return
 
         # Filename now includes Language for quick OS-level sorting
-        final_filename = os.path.join(self.output_dir, f"{code}_[{data['language']}]_{data['safe_title']}.pdf")
+        final_filename = os.path.join(self.output_dir, f"{code}_[{data['artist']}]_{data['safe_title']}.pdf")
         
         img_files = [os.path.join(temp_path, f) for f in sorted(os.listdir(temp_path)) 
                      if f.lower().endswith(('.jpg', '.png', '.webp', '.gif'))]
@@ -166,7 +166,7 @@ class Nhentai2PDF:
                 meta['dc:language'] = [data['language'].lower()]
             
             # Linearize enables Fast Web View (FIFO loading)
-            pdf.save(final_filename, linearize=True)
+            pdf.save`(final_filename, linearize=True)
         
         shutil.rmtree(temp_path)
         print("=" * 60)
@@ -175,7 +175,8 @@ class Nhentai2PDF:
         print(f"  LANGUAGE : {data['language']}")
         print(f"  VOLUME   : {data['total_pages']} Pages")
         print("=" * 60)
-        print(f"\n[!] Compile success. [{data['title']}] in [{data['language']}] Archive completed. 😏")
+        print(f"  [!] Compile success. [{data['title']}]")
+        print(f"      in [{data['language']}] Archive completed. 😏")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
