@@ -213,11 +213,14 @@ class Nhentai2PDF:
         print(f"   -> Compile success. [{data['title']}]")
         print(f"      in [{data['language']}] Archive completed. 😏")
 
-if __name__ == "__main__":
+def main():
     if len(sys.argv) < 2:
-        print("Usage: py nh2pdf.py <code_here>")
+        print("Usage: nh2pdf <code_here>")
     else:
         try:
             asyncio.run(Nhentai2PDF().execute(sys.argv[1]))
         except KeyboardInterrupt: print("\n[!] Emergency Stop.")
         except Exception as e: print(f"\n[!] Critical System Error: {e}")
+
+if __name__ == "__main__":
+    main()

@@ -14,18 +14,24 @@ A high-performance, asynchronous Python utility designed to fetch, normalize, an
 
 ## 🛠️ Prerequisites
 
-Ensure you have Python 3.9+ installed. You will need the following libraries:
+Ensure you have [uv](https://docs.astral.sh/uv/) installed. You can install all dependencies and set up the environment with:
 
 ```powershell
-pip install aiohttp cloudscraper beautifulsoup4 tqdm pikepdf Pillow
+uv sync
 ```
 
 ## 🚀 Usage
 
-Run the script using the Python launcher or standard `python` command:
+You can now run the tool directly using `uv run` or by calling the entry point:
 
+### Using uv run:
 ```powershell
-py nh2pdf.py <6-digit-code>
+uv run nh2pdf <6-digit-code>
+```
+
+### Alternatively, using standard python:
+```powershell
+python nh2pdf.py <6-digit-code>
 ```
 
 ### Execution Flow:
