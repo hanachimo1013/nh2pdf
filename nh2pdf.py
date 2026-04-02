@@ -28,13 +28,13 @@ def retry_on_failure(max_retries=3, base_delay=1):
     return decorator
 
 class Nhentai2PDF:
-    def __init__(self, concurrency_limit=5):
+    def __init__(self, output_dir=r"G:\My Drive\Luxurious Chest\Doujin Archives", concurrency_limit=5):
         self.scraper = cloudscraper.create_scraper(
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
         self.semaphore = asyncio.Semaphore(concurrency_limit)
-        # Your Luxurious GDrive Path
-        self.output_dir = r"G:\My Drive\Luxurious Chest\Doujin Archives"
+        # Your Luxurious GDrive Path, now configurable
+        self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _sanitize(self, text):
@@ -59,10 +59,16 @@ class Nhentai2PDF:
         artist_name = artist_tag.find('span', class_='name').text if artist_tag else "Unknown"
         
         # Comprehensive Tag and Language Extraction
-        tags = [t.find('span', class_='name').text for t in soup.find_all('a', href=re.compile(r'/tag/'))]
+        try:
+            tags = [t.find('span', class_='name').text for t in soup.find_all('a', href=re.compile(r'/tag/'))]
+        except Exception:
+            tags = []
         
         # Specifically target the language category
-        lang_tags = [t.find('span', class_='name').text for t in soup.find_all('a', href=re.compile(r'/language/'))]
+        try:
+            lang_tags = [t.find('span', class_='name').text for t in soup.find_all('a', href=re.compile(r'/language/'))]
+        except Exception:
+            lang_tags = []
         # Filter out 'translated' to find the actual language (English, Japanese, etc.)
         detected_lang = "Unknown"
         for l in lang_tags:
@@ -81,20 +87,30 @@ class Nhentai2PDF:
             "url": url
         }
 
+    @retry_on_failure(max_retries=3, base_delay=1)
+    async def _fetch_image(self, session, url, temp_path, page_num, ext):
+        async with session.get(url, timeout=12) as resp:
+            if resp.status == 200:
+                content = await resp.read()
+                file_path = os.path.join(temp_path, f"{page_num:03d}.{ext}")
+                with open(file_path, "wb") as f:
+                    f.write(content)
+                return True
+            return False
+
     async def download_page(self, session, media_id, page_num, temp_path):
         extensions = ['jpg', 'png', 'webp', 'gif']
         async with self.semaphore:
             for ext in extensions:
                 url = f"https://i.nhentai.net/galleries/{media_id}/{page_num}.{ext}"
                 try:
-                    async with session.get(url, timeout=12) as resp:
-                        if resp.status == 200:
-                            content = await resp.read()
-                            file_path = os.path.join(temp_path, f"{page_num:03d}.{ext}")
-                            with open(file_path, "wb") as f:
-                                f.write(content)
-                            return True
-                except: continue
+                    success = await self._fetch_image(session, url, temp_path, page_num, ext)
+                    if success:
+                        return True
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    pass # Retried already, fail gracefully
+                except Exception:
+                    pass # Other potential errors
             return False
 
     async def execute(self, code):
@@ -134,26 +150,34 @@ class Nhentai2PDF:
                      if f.lower().endswith(('.jpg', '.png', '.webp', '.gif'))]
 
         print(f"[*] Normalizing aspect ratios (1600x2260)...")
-        processed_pages = []
         TARGET_W, TARGET_H = 1600, 2260 
+        processed_img_files = []
 
         for img_path in img_files:
-            img = Image.open(img_path).convert('RGB')
-            ratio = min(TARGET_W / img.width, TARGET_H / img.height)
-            new_size = (int(img.width * ratio), int(img.height * ratio))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
-            canvas = Image.new('RGB', (TARGET_W, TARGET_H), (255, 255, 255))
-            canvas.paste(img, ((TARGET_W - new_size[0]) // 2, (TARGET_H - new_size[1]) // 2))
-            processed_pages.append(canvas)
+            with Image.open(img_path) as img:
+                img = img.convert('RGB')
+                ratio = min(TARGET_W / img.width, TARGET_H / img.height)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                resized_img = img.resize(new_size, Image.Resampling.LANCZOS)
+                canvas = Image.new('RGB', (TARGET_W, TARGET_H), (255, 255, 255))
+                canvas.paste(resized_img, ((TARGET_W - new_size[0]) // 2, (TARGET_H - new_size[1]) // 2))
+                
+                # Save processed temporarily to limit PDF compilation memory footprint
+                proc_path = img_path + ".jpg"
+                canvas.save(proc_path, "JPEG", quality=90)
+                processed_img_files.append(proc_path)
 
         print(f"[*] Compiling & Linearizing (Quality: 90)...")
-        processed_pages[0].save(
-            final_filename, 
-            save_all=True, 
-            append_images=processed_pages[1:], 
-            resolution=100.0, 
-            quality=90
-        )
+        if processed_img_files:
+            first_img = Image.open(processed_img_files[0])
+            first_img.save(
+                final_filename, 
+                save_all=True, 
+                append_images=(Image.open(p) for p in processed_img_files[1:]), 
+                resolution=100.0, 
+                quality=90
+            )
+            first_img.close()
         
         # Refined Metadata Injection with pikepdf
         with pikepdf.open(final_filename, allow_overwriting_input=True) as pdf:
