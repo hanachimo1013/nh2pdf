@@ -27,3 +27,11 @@ outputs/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+
+# Local response logs
+resp*.html
+test_*.py

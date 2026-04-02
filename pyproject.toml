@@ -11,10 +11,12 @@ dependencies = [
     "pikepdf>=9.5.2",
     "pillow>=11.1.0",
     "tqdm>=4.67.1",
+    "img2pdf>=0.6.3",
+    "lxml>=6.0.2",
 ]
 
 [project.scripts]
-nh2pdf = "nh2pdf:main"
+nh2pdf = "nhentai2pdf:main"
 
 [build-system]
 requires = ["hatchling"]

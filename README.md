@@ -3,18 +3,18 @@
 A high-performance, asynchronous Python utility designed to fetch, normalize, and archive galleries into a structured PDF format. Optimized for local Google Drive synchronization, high-fidelity viewing, and memory efficiency across extremely large multi-hundred page archives.
 
 ## ✨ Key Features
+* **Official V2 API Integration:** Uses the nhentai API for accurate metadata and precise image extension handling (no more probing).
 * **Asynchronous Downloads:** Utilizes `aiohttp` and `asyncio` for high-speed concurrent fetching.
-* **Resilient Connectivity:** Automatically catches and retries failed downloads caused by intermittent timeouts or client drops.
-* **Universal Extension Hunter:** Automatically detects and resolves mixed-format galleries (JPG, PNG, WebP, GIF).
+* **Resilient Connectivity:** Automatically catches and retries failed downloads caused by intermittently timeouts or client drops.
+* **Universal Format Support:** Correctly handles JPG, PNG, and WebP pages without trial-and-error.
 * **Aspect Ratio Normalization:** Every page is centered on a uniform 1600x2260 canvas to prevent "jumping" during reading.
-* **Memory-Efficient PDF Compilation:** Leverages on-disk buffering and generator consumption to compile massive archives without encountering out-of-memory errors on system RAM.
 * **Metadata Injection:** Bakes Artist, Title, Language, and Tags directly into the PDF metadata via `pikepdf`.
-* **Configurable Outputs:** Defaults storage directly to a designated Google Drive path, but is configured to cleanly accept any custom directory.
+* **Smart Storage:** Defaults to Google Drive if available, falling back to a local `outputs` directory automatically.
 * **Strict Integrity Check:** Aborts compilation if a page critically fails to download, ensuring 100% complete archives.
 
 ## 🛠️ Prerequisites
 
-Ensure you have [uv](https://docs.astral.sh/uv/) installed. You can install all dependencies and set up the environment with:
+Ensure you have [uv](https://docs.astral.sh/uv/) installed. You can set up the environment with:
 
 ```powershell
 uv sync
@@ -22,32 +22,30 @@ uv sync
 
 ## 🚀 Usage
 
-You can now run the tool directly using `uv run` or by calling the entry point:
+Run the tool directly through `uv run`:
 
-### Using uv run:
 ```powershell
 uv run nh2pdf <6-digit-code>
 ```
 
-### Alternatively, using standard python:
+Alternatively, run as a standard Python script:
+
 ```powershell
-python nh2pdf.py <6-digit-code>
+python nhentai2pdf.py <6-digit-code>
 ```
 
 ### Execution Flow:
-1. **Metadata Fetch:** The script connects and displays the Title, Artist, Language, and Page Count.
-2. **Handshake:** You will be prompted to confirm the download (`[Enter to Continue / n to Cancel]`).
-3. **Download:** Pages are fetched asynchronously into a temporary directory using automatic retry failsafes.
-4. **Processing & Export:** Images are individually resized to a uniform `1600x2260` canvas, streamed sequentially into a multi-page PDF object, and cleanly saved to your output directory. The output filename neatly incorporates the Language tag.
+1. **Metadata Fetch:** Connects to the V2 API and displays Title, Artist, Language, and Page Count.
+2. **Handshake:** Confirms the download via `[Enter to Continue / n to Cancel]`.
+3. **Download:** Pages are fetched asynchronously into a temporary directory with retry logic.
+4. **Processing & Export:** Images are normalized to a uniform `1600x2260` canvas and compiled into a high-quality PDF.
+5. **Finalization:** Metadata is injected and the PDF is linearized for fast web viewing.
 
 ## 📁 Project Structure
-* `nh2pdf.py`: The core architect script.
-* `temp_XXXXXX/`: Temporary storage for raw images during the fetch and conversion process (auto-cleaned after success/failure).
+* `nhentai2pdf.py`: The core architect script.
+* `pyproject.toml`:uv-ready project configuration.
+* `temp_XXXXXX/`: Temporary storage for raw images (auto-cleaned).
 * **Outputs:** Defaults to `G:\My Drive\Luxurious Chest\Doujin Archives`.
-
-## ⚠️ Requirements & Limitations
-* **Cloudflare:** Uses `cloudscraper` to bypass basic bot detection. If HTTP connectivity issues persist during the handshake phase, ensure your proxy/VPN/WARP is active.
-* **Drive Path:** Ensure your G: drive is securely mounted before execution if you are saving straight to your Google Drive ecosystem.
 
 ---
 *Created for the Luxurious Chest Collection. 😏*
