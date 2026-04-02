@@ -33,8 +33,19 @@ class Nhentai2PDF:
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
         self.semaphore = asyncio.Semaphore(concurrency_limit)
-        # Your Luxurious GDrive Path, now configurable
-        self.output_dir = output_dir
+        
+        # Fallback to local 'outputs' if your luxurious cloud path isn't mapped
+        if not os.path.exists(os.path.abspath(output_dir).split(os.sep)[0] + os.sep):
+             self.output_dir = "outputs"
+        elif not os.path.exists(output_dir):
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+                self.output_dir = output_dir
+            except:
+                self.output_dir = "outputs"
+        else:
+            self.output_dir = output_dir
+
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _sanitize(self, text):
@@ -199,7 +210,7 @@ class Nhentai2PDF:
         print(f"  LANGUAGE : {data['language']}")
         print(f"  VOLUME   : {data['total_pages']} Pages")
         print("=" * 60)
-        print(f"  [!] Compile success. [{data['title']}]")
+        print(f"   -> Compile success. [{data['title']}]")
         print(f"      in [{data['language']}] Archive completed. 😏")
 
 if __name__ == "__main__":
