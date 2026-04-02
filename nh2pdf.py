@@ -124,8 +124,8 @@ class Nhentai2PDF:
         print(f"  VOLUME   : {data['total_pages']} Pages")
         print("=" * 60)
         
-        confirm = input(f"Compile this entry? (y/n): ").lower()
-        if confirm != 'y':
+        confirm = input(f"Compile this entry? [Enter to Continue / n to Cancel]: ").lower()
+        if confirm == 'n':
             print("[!] Operation scrubbed.")
             return
 

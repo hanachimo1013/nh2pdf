@@ -30,7 +30,7 @@ py nh2pdf.py <6-digit-code>
 
 ### Execution Flow:
 1. **Metadata Fetch:** The script connects and displays the Title, Artist, Language, and Page Count.
-2. **Handshake:** You will be prompted to confirm the download (`y/n`).
+2. **Handshake:** You will be prompted to confirm the download (`[Enter to Continue / n to Cancel]`).
 3. **Download:** Pages are fetched asynchronously into a temporary directory using automatic retry failsafes.
 4. **Processing & Export:** Images are individually resized to a uniform `1600x2260` canvas, streamed sequentially into a multi-page PDF object, and cleanly saved to your output directory. The output filename neatly incorporates the Language tag.
 
