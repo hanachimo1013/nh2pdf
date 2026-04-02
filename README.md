@@ -1,4 +1,4 @@
-# 🏛️ nhentai2pdf: Luxurious Archive Architect
+# 🏛️ nhentai2pdf: Luxurious Archive
 
 A high-performance, asynchronous Python utility designed to fetch, normalize, and archive galleries into a structured PDF format. Optimized for local Google Drive synchronization, high-fidelity viewing, and memory efficiency across extremely large multi-hundred page archives.
 
