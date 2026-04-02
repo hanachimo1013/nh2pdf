@@ -1,0 +1,28 @@
+# --- Python Caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+.env
+.venv/
+env/
+venv/
+
+# --- Generated Project Artifacts ---
+# Ignore all nhentai2pdf temporary processing folders
+temp_*/
+
+# Ignore compiled PDFs
+*.pdf
+
+# Ignore raw images (in case of failed executions or testing scripts)
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+
+# OS generated files
+.DS_Store
+Thumbs.db
