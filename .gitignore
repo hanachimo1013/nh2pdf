@@ -32,6 +32,9 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Local response logs
+# Local response logs and debug scripts
 resp*.html
 test_*.py
+debug_*.py
+debug_*.json
+*.log

@@ -9,7 +9,8 @@ A high-performance, asynchronous Python utility designed to fetch, normalize, an
 * **Universal Format Support:** Correctly handles JPG, PNG, and WebP pages without trial-and-error.
 * **Aspect Ratio Normalization:** Every page is centered on a uniform 1600x2260 canvas to prevent "jumping" during reading.
 * **Metadata Injection:** Bakes Artist, Title, Language, and Tags directly into the PDF metadata via `pikepdf`.
-* **Smart Storage:** Defaults to Google Drive if available, falling back to a local `outputs` directory automatically.
+* **Smart Storage Management:** Automatically checks for your `G:\` Google Drive availability and write-access, seamlessly falling back to a local `outputs` folder if needed.
+* **Reliable Metadata Injection:** Handles race conditions with cloud/network drives, ensuring metadata is successfully baked even if the drive lags during the save process.
 * **Strict Integrity Check:** Aborts compilation if a page critically fails to download, ensuring 100% complete archives.
 
 ## 🛠️ Prerequisites

@@ -7,7 +7,6 @@ import cloudscraper
 import pikepdf
 import shutil
 import sys
-from bs4 import BeautifulSoup
 from tqdm.asyncio import tqdm
 from functools import wraps
 from PIL import Image
@@ -34,22 +33,32 @@ class Nhentai2PDF:
         )
         self.semaphore = asyncio.Semaphore(concurrency_limit)
         
-        # Determine output directory
-        base_path = os.path.abspath(output_dir)
-        drive = os.path.splitdrive(base_path)[0]
+        # Determine output directory with aggressive fallback
+        final_dir = output_dir
+        fallback = False
         
-        if drive and not os.path.exists(drive + os.sep):
-            print(f"[*] Drive {drive} not found. Falling back to 'outputs'.")
-            self.output_dir = "outputs"
-        else:
-            self.output_dir = output_dir
-
         try:
-            os.makedirs(self.output_dir, exist_ok=True)
-        except Exception as e:
-            print(f"[!] Could not create {self.output_dir}: {e}. Falling back to 'outputs'.")
+            # Check if drive exists (Windows specific)
+            drive = os.path.splitdrive(os.path.abspath(final_dir))[0]
+            if drive and not os.path.exists(drive + os.sep):
+                fallback = True
+            else:
+                os.makedirs(final_dir, exist_ok=True)
+                # Verify writability by touching a dummy file
+                test_file = os.path.join(final_dir, ".write_test")
+                with open(test_file, "w") as f:
+                    f.write("test")
+                os.remove(test_file)
+        except Exception:
+            fallback = True
+
+        if fallback:
             self.output_dir = "outputs"
             os.makedirs(self.output_dir, exist_ok=True)
+            if final_dir != "outputs":
+                print(f"[*] Target directory '{final_dir}' inaccessible. Falling back to '{self.output_dir}'.")
+        else:
+            self.output_dir = final_dir
 
     def _sanitize(self, text):
         return re.sub(r'[\\/*?:"<>|]', "", text).strip().replace(" ", "_")
@@ -72,9 +81,10 @@ class Nhentai2PDF:
             raise Exception("Failed to parse API response.")
 
         # Mapping API fields to our structure
-        title = data.get('title', {}).get('pretty') or data.get('title', {}).get('english', 'Untitled')
+        title_data = data.get('title', {})
+        title = title_data.get('pretty') or title_data.get('english') or title_data.get('japanese') or "Untitled"
         media_id = data.get('media_id')
-        total_pages = data.get('num_pages')
+        num_pages = data.get('num_pages', 0)
         
         # Tags processing
         tags = []
@@ -91,16 +101,31 @@ class Nhentai2PDF:
             elif t_type == 'language' and t_name.lower() != 'translated':
                 language = t_name.capitalize()
 
-        # Image extensions mapping
-        # API uses: 'j' -> jpg, 'p' -> png, 'w' -> webp
-        ext_map = {'j': 'jpg', 'p': 'png', 'w': 'webp'}
-        pages_ext = [ext_map.get(p.get('t'), 'jpg') for p in data.get('images', {}).get('pages', [])]
+        # Image extensions mapping from 'pages' root
+        # V2 structure: data['pages'] -> list of { 'path': '...', 'number': ... }
+        pages_list = data.get('pages', [])
+        # Fallback to images structure if root pages is empty
+        if not pages_list:
+            pages_list = data.get('images', {}).get('pages', [])
+            
+        if not pages_list and num_pages > 0:
+            raise Exception("Gallery found but could not fetch image list (empty 'pages' data).")
+
+        pages_ext = []
+        for p in pages_list:
+            path = p.get('path', '')
+            ext = path.split('.')[-1] if '.' in path else 'jpg'
+            # If path is missing but 't' is present (older API style sometimes mixed in)
+            if not path and 't' in p:
+                ext_map = {'j': 'jpg', 'p': 'png', 'w': 'webp'}
+                ext = ext_map.get(p.get('t'), 'jpg')
+            pages_ext.append(ext)
 
         return {
             "title": title,
             "safe_title": self._sanitize(title),
             "media_id": media_id,
-            "total_pages": total_pages,
+            "total_pages": num_pages,
             "artist": artist,
             "tags": tags,
             "language": language,
@@ -212,22 +237,33 @@ class Nhentai2PDF:
             )
             first_img.close()
         
-        # Inject Metadata
-        try:
-            with pikepdf.open(final_filename, allow_overwriting_input=True) as pdf:
-                with pdf.open_metadata() as meta:
-                    meta['dc:title'] = f"{data['title']} [{data['language']}]"
-                    meta['dc:creator'] = [data['artist']]
-                    meta['dc:subject'] = data['tags']
-                    meta['dc:language'] = [data['language'].lower()]
-                pdf.save(final_filename, linearize=True)
-        except Exception as e:
-            print(f"[!] Warning: Failed to inject metadata: {e}")
+        # Inject Metadata (with race-condition retry for network drives)
+        print(f"[*] Finalizing metadata and linearization...")
+        for attempt in range(5):
+            if os.path.exists(final_filename):
+                try:
+                    with pikepdf.open(final_filename, allow_overwriting_input=True) as pdf:
+                        with pdf.open_metadata() as meta:
+                            meta['dc:title'] = f"{data['title']} [{data['language']}]"
+                            meta['dc:creator'] = [data['artist']]
+                            meta['dc:subject'] = data['tags']
+                            meta['dc:language'] = [data['language'].lower()]
+                        pdf.save(final_filename, linearize=True)
+                    break # Success
+                except Exception as e:
+                    if attempt == 4:
+                        print(f"[!] Warning: Failed to inject metadata: {e}")
+                    await asyncio.sleep(1)
+            else:
+                if attempt == 4:
+                    print(f"[!] Warning: File not found for metadata injection: {final_filename}")
+                await asyncio.sleep(1)
         
         shutil.rmtree(temp_path)
         print("=" * 60)
         print(f"   -> Success: [{data['title']}]")
-        print(f"      Archive completed: {final_filename}")
+        print(f"      Archive completed: {os.path.basename(final_filename)}")
+        print(f"      Location: {self.output_dir}")
         print("=" * 60)
 
 def main():
