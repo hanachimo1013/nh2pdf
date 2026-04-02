@@ -15,6 +15,7 @@ temp_*/
 
 # Ignore compiled PDFs
 *.pdf
+outputs/
 
 # Ignore raw images (in case of failed executions or testing scripts)
 *.jpg
