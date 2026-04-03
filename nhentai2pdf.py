@@ -179,7 +179,7 @@ class Nhentai2PDF:
             return False
 
         # Prepare final filename
-        final_filename = os.path.join(self.output_dir, f"{code}_[{data['artist']}]_{data['safe_title']}.pdf")
+        final_filename = os.path.join(self.output_dir, f"{code}_[{self._sanitize(data['artist'])}]_{data['safe_title']}.pdf")
         
         img_files = []
         for f in sorted(os.listdir(temp_path)):
