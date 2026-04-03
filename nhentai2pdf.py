@@ -171,8 +171,6 @@ class Nhentai2PDF:
         if not all(results):
             failed = len([r for r in results if not r])
             print(f"\n[!] ERROR: Integrity check failed. {failed} page(s) failed to download.")
-            # We don't delete temp_path immediately so user can see what failed? 
-            # Actually, the original code deleted it.
             shutil.rmtree(temp_path)
             return False
 
