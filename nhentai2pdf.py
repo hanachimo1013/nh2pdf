@@ -31,7 +31,7 @@ class Nhentai2PDF:
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
         self.semaphore = asyncio.Semaphore(concurrency_limit)
-        
+
         self.output_dir = output_dir
         try:
             os.makedirs(self.output_dir, exist_ok=True)
@@ -47,7 +47,7 @@ class Nhentai2PDF:
         """Fetch metadata using the v2 API."""
         api_url = f"https://nhentai.net/api/v2/galleries/{code}"
         resp = self.scraper.get(api_url)
-        
+
         if resp.status_code == 403:
             raise Exception("Access Denied (Cloudflare). Try updating cloudscraper or using a VPN.")
         if resp.status_code == 404:
@@ -65,12 +65,12 @@ class Nhentai2PDF:
         title = title_data.get('pretty') or title_data.get('english') or title_data.get('japanese') or "Untitled"
         media_id = data.get('media_id')
         num_pages = data.get('num_pages', 0)
-        
+
         # Tags processing
         tags = []
         artist = "Unknown"
         language = "Unknown"
-        
+
         for t in data.get('tags', []):
             t_type = t.get('type')
             t_name = t.get('name', '')
@@ -87,7 +87,7 @@ class Nhentai2PDF:
         # Fallback to images structure if root pages is empty
         if not pages_list:
             pages_list = data.get('images', {}).get('pages', [])
-            
+
         if not pages_list and num_pages > 0:
             raise Exception("Gallery found but could not fetch image list (empty 'pages' data).")
 
@@ -131,29 +131,8 @@ class Nhentai2PDF:
             except Exception:
                 return False
 
-    async def execute(self, code):
-        print(f"\n[*] Querying Archive ID: {code}...")
-        try:
-            data = self.fetch_metadata(code)
-        except Exception as e:
-            print(f"[!] Metadata Fetch Error: {e}")
-            return False
 
-        print("=" * 60)
-        print(f"  TARGET   : {data['title']}")
-        print(f"  ARTIST   : {data['artist']}")
-        print(f"  LANGUAGE : {data['language']}")
-        print(f"  VOLUME   : {data['total_pages']} Pages")
-        print("=" * 60)
-        
-        confirm = input(f"Compile this entry? [Enter to Continue / n to Cancel]: ").lower()
-        if confirm == 'n':
-            print("[!] Operation scrubbed.")
-            return False
-
-        temp_path = f"temp_{code}"
-        os.makedirs(temp_path, exist_ok=True)
-        
+    async def _download_images(self, code, data, temp_path):
         # Sync cookies and UA from cloudscraper to aiohttp
         cookies = self.scraper.cookies.get_dict()
         headers = {
@@ -165,27 +144,26 @@ class Nhentai2PDF:
             tasks = []
             for i, ext in enumerate(data['pages_ext'], 1):
                 tasks.append(self.download_page(session, data['media_id'], i, ext, temp_path))
-            
+
             results = await tqdm.gather(*tasks, desc=f"Progress [{code}]", unit="pg")
 
         if not all(results):
             failed = len([r for r in results if not r])
             print(f"\n[!] ERROR: Integrity check failed. {failed} page(s) failed to download.")
-            # We don't delete temp_path immediately so user can see what failed? 
+            # We don't delete temp_path immediately so user can see what failed?
             # Actually, the original code deleted it.
             shutil.rmtree(temp_path)
             return False
+        return True
 
-        # Prepare final filename
-        final_filename = os.path.join(self.output_dir, f"{code}_[{data['artist']}]_{data['safe_title']}.pdf")
-        
+    def _compile_pdf(self, temp_path, final_filename):
         img_files = []
         for f in sorted(os.listdir(temp_path)):
             if f.lower().endswith(('.jpg', '.png', '.webp', '.gif')):
                 img_files.append(os.path.join(temp_path, f))
 
         print(f"[*] Normalizing and Compiling (1600x2260)...")
-        TARGET_W, TARGET_H = 1600, 2260 
+        TARGET_W, TARGET_H = 1600, 2260
         processed_img_files = []
 
         for img_path in img_files:
@@ -197,11 +175,11 @@ class Nhentai2PDF:
                     resized_img = img.resize(new_size, Image.Resampling.LANCZOS)
                     canvas = Image.new('RGB', (TARGET_W, TARGET_H), (255, 255, 255))
                     canvas.paste(resized_img, ((TARGET_W - new_size[0]) // 2, (TARGET_H - new_size[1]) // 2))
-                    
+
                     proc_path = img_path + ".jpg"
                     canvas.save(proc_path, "JPEG", quality=90)
                     processed_img_files.append(proc_path)
-                    
+
                     # Prevent memory ballooning by explicitly releasing image buffers
                     img.close()
                     resized_img.close()
@@ -217,24 +195,26 @@ class Nhentai2PDF:
                 first_img = Image.open(processed_img_files[0])
                 for p in processed_img_files[1:]:
                     images.append(Image.open(p))
-                
+
                 first_img.save(
-                    final_filename, 
-                    save_all=True, 
-                    append_images=images, 
-                    resolution=100.0, 
+                    final_filename,
+                    save_all=True,
+                    append_images=images,
+                    resolution=100.0,
                     quality=90
                 )
             except Exception as e:
                 print(f"[!] PDF Compilation Error: {e}")
                 shutil.rmtree(temp_path)
-                return
+                return False
             finally:
                 if first_img:
                     first_img.close()
                 for i in images:
                     i.close()
-        
+        return True
+
+    async def _inject_metadata(self, final_filename, data):
         # Inject Metadata (with race-condition retry for network drives)
         print(f"[*] Finalizing metadata and linearization...")
         for attempt in range(5):
@@ -256,7 +236,41 @@ class Nhentai2PDF:
                 if attempt == 4:
                     print(f"[!] Warning: File not found for metadata injection: {final_filename}")
                 await asyncio.sleep(1)
-        
+
+    async def execute(self, code):
+        print(f"\n[*] Querying Archive ID: {code}...")
+        try:
+            data = await asyncio.to_thread(self.fetch_metadata, code)
+        except Exception as e:
+            print(f"[!] Metadata Fetch Error: {e}")
+            return False
+
+        print("=" * 60)
+        print(f"  TARGET   : {data['title']}")
+        print(f"  ARTIST   : {data['artist']}")
+        print(f"  LANGUAGE : {data['language']}")
+        print(f"  VOLUME   : {data['total_pages']} Pages")
+        print("=" * 60)
+
+        confirm = input(f"Compile this entry? [Enter to Continue / n to Cancel]: ").lower()
+        if confirm == 'n':
+            print("[!] Operation scrubbed.")
+            return False
+
+        temp_path = f"temp_{code}"
+        os.makedirs(temp_path, exist_ok=True)
+
+        if not await self._download_images(code, data, temp_path):
+            return False
+
+        # Prepare final filename
+        final_filename = os.path.join(self.output_dir, f"{code}_[{data['artist']}]_{data['safe_title']}.pdf")
+
+        if not await asyncio.to_thread(self._compile_pdf, temp_path, final_filename):
+            return False
+
+        await self._inject_metadata(final_filename, data)
+
         shutil.rmtree(temp_path)
         print("=" * 60)
         print(f"   -> Success: [{data['title']}]")
@@ -264,5 +278,3 @@ class Nhentai2PDF:
         print(f"      Location: {self.output_dir}")
         print("=" * 60)
         return True
-
-
