@@ -6,7 +6,6 @@ import aiohttp
 import cloudscraper
 import pikepdf
 import shutil
-import sys
 from tqdm.asyncio import tqdm
 from functools import wraps
 from PIL import Image
@@ -27,38 +26,19 @@ def retry_on_failure(max_retries=3, base_delay=1):
     return decorator
 
 class Nhentai2PDF:
-    def __init__(self, output_dir=r"G:\My Drive\Luxurious Chest\Doujin Archives", concurrency_limit=5):
+    def __init__(self, output_dir="outputs", concurrency_limit=5):
         self.scraper = cloudscraper.create_scraper(
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
         self.semaphore = asyncio.Semaphore(concurrency_limit)
         
-        # Determine output directory with aggressive fallback
-        final_dir = output_dir
-        fallback = False
-        
+        self.output_dir = output_dir
         try:
-            # Check if drive exists (Windows specific)
-            drive = os.path.splitdrive(os.path.abspath(final_dir))[0]
-            if drive and not os.path.exists(drive + os.sep):
-                fallback = True
-            else:
-                os.makedirs(final_dir, exist_ok=True)
-                # Verify writability by touching a dummy file
-                test_file = os.path.join(final_dir, ".write_test")
-                with open(test_file, "w") as f:
-                    f.write("test")
-                os.remove(test_file)
-        except Exception:
-            fallback = True
-
-        if fallback:
+            os.makedirs(self.output_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[*] Target directory '{self.output_dir}' inaccessible: {e}. Falling back to 'outputs'.")
             self.output_dir = "outputs"
             os.makedirs(self.output_dir, exist_ok=True)
-            if final_dir != "outputs":
-                print(f"[*] Target directory '{final_dir}' inaccessible. Falling back to '{self.output_dir}'.")
-        else:
-            self.output_dir = final_dir
 
     def _sanitize(self, text):
         return re.sub(r'[\\/*?:"<>|]', "", text).strip().replace(" ", "_")
@@ -157,7 +137,7 @@ class Nhentai2PDF:
             data = self.fetch_metadata(code)
         except Exception as e:
             print(f"[!] Metadata Fetch Error: {e}")
-            return
+            return False
 
         print("=" * 60)
         print(f"  TARGET   : {data['title']}")
@@ -169,7 +149,7 @@ class Nhentai2PDF:
         confirm = input(f"Compile this entry? [Enter to Continue / n to Cancel]: ").lower()
         if confirm == 'n':
             print("[!] Operation scrubbed.")
-            return
+            return False
 
         temp_path = f"temp_{code}"
         os.makedirs(temp_path, exist_ok=True)
@@ -194,7 +174,7 @@ class Nhentai2PDF:
             # We don't delete temp_path immediately so user can see what failed? 
             # Actually, the original code deleted it.
             shutil.rmtree(temp_path)
-            return
+            return False
 
         # Prepare final filename
         final_filename = os.path.join(self.output_dir, f"{code}_[{data['artist']}]_{data['safe_title']}.pdf")
@@ -221,21 +201,39 @@ class Nhentai2PDF:
                     proc_path = img_path + ".jpg"
                     canvas.save(proc_path, "JPEG", quality=90)
                     processed_img_files.append(proc_path)
+                    
+                    # Prevent memory ballooning by explicitly releasing image buffers
+                    img.close()
+                    resized_img.close()
+                    canvas.close()
             except Exception as e:
                 print(f"[!] Error processing {img_path}: {e}")
 
         if processed_img_files:
-            # We use img2pdf if available for faster joining, but since we already resized...
-            # Pillow's save_all is fine since we are re-opening them via a generator.
-            first_img = Image.open(processed_img_files[0])
-            first_img.save(
-                final_filename, 
-                save_all=True, 
-                append_images=(Image.open(p) for p in processed_img_files[1:]), 
-                resolution=100.0, 
-                quality=90
-            )
-            first_img.close()
+            images = []
+            first_img = None
+            try:
+                processed_img_files.sort()
+                first_img = Image.open(processed_img_files[0])
+                for p in processed_img_files[1:]:
+                    images.append(Image.open(p))
+                
+                first_img.save(
+                    final_filename, 
+                    save_all=True, 
+                    append_images=images, 
+                    resolution=100.0, 
+                    quality=90
+                )
+            except Exception as e:
+                print(f"[!] PDF Compilation Error: {e}")
+                shutil.rmtree(temp_path)
+                return
+            finally:
+                if first_img:
+                    first_img.close()
+                for i in images:
+                    i.close()
         
         # Inject Metadata (with race-condition retry for network drives)
         print(f"[*] Finalizing metadata and linearization...")
@@ -265,18 +263,6 @@ class Nhentai2PDF:
         print(f"      Archive completed: {os.path.basename(final_filename)}")
         print(f"      Location: {self.output_dir}")
         print("=" * 60)
+        return True
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: nh2pdf <code_here>")
-    else:
-        code = sys.argv[1]
-        try:
-            asyncio.run(Nhentai2PDF().execute(code))
-        except KeyboardInterrupt:
-            print("\n[!] Emergency Stop.")
-        except Exception as e:
-            print(f"\n[!] Critical System Error: {e}")
-
-if __name__ == "__main__":
-    main()
+

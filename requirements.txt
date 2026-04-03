@@ -1,6 +1,0 @@
-cloudscraper
-aiohttp
-img2pdf
-pikepdf
-beautifulsoup4
-tqdm
