@@ -8,10 +8,10 @@ import pikepdf
 import shutil
 from tqdm.asyncio import tqdm
 from functools import wraps
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 # --- RETRY DECORATOR ---
-def retry_on_failure(max_retries=3, base_delay=1):
+def retry_on_failure(max_retries=5, base_delay=2):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -117,14 +117,18 @@ class Nhentai2PDF:
         async with session.get(url, timeout=12) as resp:
             if resp.status == 200:
                 content = await resp.read()
-                with open(path, "wb") as f:
-                    f.write(content)
+                def _write_file():
+                    with open(path, "wb") as f:
+                        f.write(content)
+                await asyncio.to_thread(_write_file)
                 return True
+            elif resp.status in [403, 429, 500, 502, 503, 504]:
+                print(f"[~] Rate limited ({resp.status}) on {url.split('/')[-1]}, retrying...")
+                resp.raise_for_status()
             return False
 
     async def download_page(self, session, media_id, page_num, ext, temp_path):
         async with self.semaphore:
-            ext = re.sub(r'[^a-zA-Z0-9]', '', ext)
             url = f"https://i.nhentai.net/galleries/{media_id}/{page_num}.{ext}"
             file_path = os.path.join(temp_path, f"{page_num:04d}.{ext}")
             try:
@@ -172,13 +176,11 @@ class Nhentai2PDF:
         if not all(results):
             failed = len([r for r in results if not r])
             print(f"\n[!] ERROR: Integrity check failed. {failed} page(s) failed to download.")
-            # We don't delete temp_path immediately so user can see what failed? 
-            # Actually, the original code deleted it.
             shutil.rmtree(temp_path)
             return False
 
         # Prepare final filename
-        final_filename = os.path.join(self.output_dir, f"{code}_[{data['artist']}]_{data['safe_title']}.pdf")
+        final_filename = os.path.join(self.output_dir, f"{code}_[{self._sanitize(data['artist'])}]_{data['safe_title']}.pdf")
         
         img_files = []
         for f in sorted(os.listdir(temp_path)):
@@ -207,7 +209,7 @@ class Nhentai2PDF:
                     img.close()
                     resized_img.close()
                     canvas.close()
-            except Exception as e:
+            except (UnidentifiedImageError, OSError, ValueError) as e:
                 print(f"[!] Error processing {img_path}: {e}")
 
         if processed_img_files:
@@ -219,6 +221,13 @@ class Nhentai2PDF:
                 for p in processed_img_files[1:]:
                     images.append(Image.open(p))
                 
+                if os.path.exists(final_filename):
+                    try:
+                        os.remove(final_filename)
+                        print(f"[*] Overwriting existing file: {os.path.basename(final_filename)}")
+                    except OSError as e:
+                        print(f"[!] Target file exists but is locked/cannot be overwritten: {e}")
+                        
                 first_img.save(
                     final_filename, 
                     save_all=True, 
@@ -266,4 +275,4 @@ class Nhentai2PDF:
         print("=" * 60)
         return True
 
-
+
