@@ -1,5 +1,6 @@
+import os
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from nhentai2pdf import Nhentai2PDF
 
 @pytest.fixture
@@ -121,3 +122,51 @@ def test_fetch_metadata_empty_pages_error(nhentai):
 
     with pytest.raises(Exception, match=r"Gallery found but could not fetch image list"):
         nhentai.fetch_metadata("123")
+
+
+@pytest.mark.asyncio
+async def test_download_page_success(nhentai):
+    session = AsyncMock()
+
+    with patch.object(nhentai, '_fetch_image', new_callable=AsyncMock) as mock_fetch_image:
+        mock_fetch_image.return_value = True
+        result = await nhentai.download_page(session, "123456", 1, "jpg", "temp_test")
+
+        assert result is True
+        mock_fetch_image.assert_called_once_with(
+            session,
+            "https://i.nhentai.net/galleries/123456/1.jpg",
+            os.path.join("temp_test", "0001.jpg")
+        )
+
+
+@pytest.mark.asyncio
+async def test_download_page_failure(nhentai):
+    session = AsyncMock()
+
+    with patch.object(nhentai, '_fetch_image', new_callable=AsyncMock) as mock_fetch_image:
+        mock_fetch_image.return_value = False
+        result = await nhentai.download_page(session, "123456", 2, "png", "temp_test")
+
+        assert result is False
+        mock_fetch_image.assert_called_once_with(
+            session,
+            "https://i.nhentai.net/galleries/123456/2.png",
+            os.path.join("temp_test", "0002.png")
+        )
+
+
+@pytest.mark.asyncio
+async def test_download_page_exception(nhentai):
+    session = AsyncMock()
+
+    with patch.object(nhentai, '_fetch_image', new_callable=AsyncMock) as mock_fetch_image:
+        mock_fetch_image.side_effect = Exception("Network error")
+        result = await nhentai.download_page(session, "123456", 3, "webp", "temp_test")
+
+        assert result is False
+        mock_fetch_image.assert_called_once_with(
+            session,
+            "https://i.nhentai.net/galleries/123456/3.webp",
+            os.path.join("temp_test", "0003.webp")
+        )
