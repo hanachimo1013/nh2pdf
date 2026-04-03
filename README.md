@@ -46,7 +46,7 @@ python nhentai2pdf.py <6-digit-code>
 * `nhentai2pdf.py`: The core architect script.
 * `pyproject.toml`:uv-ready project configuration.
 * `temp_XXXXXX/`: Temporary storage for raw images (auto-cleaned).
-* **Outputs:** Defaults to `G:\My Drive\Luxurious Chest\Doujin Archives`.
+* **Outputs:** Defaults to `./outputs`.
 
 ---
 *Created for the Luxurious Chest Collection. 😏*
