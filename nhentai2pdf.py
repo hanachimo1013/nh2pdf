@@ -8,7 +8,7 @@ import pikepdf
 import shutil
 from tqdm.asyncio import tqdm
 from functools import wraps
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 # --- RETRY DECORATOR ---
 def retry_on_failure(max_retries=3, base_delay=1):
@@ -206,7 +206,7 @@ class Nhentai2PDF:
                     img.close()
                     resized_img.close()
                     canvas.close()
-            except Exception as e:
+            except (UnidentifiedImageError, OSError, ValueError) as e:
                 print(f"[!] Error processing {img_path}: {e}")
 
         if processed_img_files:
