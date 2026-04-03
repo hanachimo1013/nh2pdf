@@ -117,8 +117,10 @@ class Nhentai2PDF:
         async with session.get(url, timeout=12) as resp:
             if resp.status == 200:
                 content = await resp.read()
-                with open(path, "wb") as f:
-                    f.write(content)
+                def _write_file():
+                    with open(path, "wb") as f:
+                        f.write(content)
+                await asyncio.to_thread(_write_file)
                 return True
             return False
 
