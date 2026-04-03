@@ -124,6 +124,7 @@ class Nhentai2PDF:
 
     async def download_page(self, session, media_id, page_num, ext, temp_path):
         async with self.semaphore:
+            ext = re.sub(r'[^a-zA-Z0-9]', '', ext)
             url = f"https://i.nhentai.net/galleries/{media_id}/{page_num}.{ext}"
             file_path = os.path.join(temp_path, f"{page_num:04d}.{ext}")
             try:
