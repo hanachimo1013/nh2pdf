@@ -11,7 +11,7 @@ from functools import wraps
 from PIL import Image, UnidentifiedImageError
 
 # --- RETRY DECORATOR ---
-def retry_on_failure(max_retries=3, base_delay=1):
+def retry_on_failure(max_retries=5, base_delay=2):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -122,6 +122,9 @@ class Nhentai2PDF:
                         f.write(content)
                 await asyncio.to_thread(_write_file)
                 return True
+            elif resp.status in [403, 429, 500, 502, 503, 504]:
+                print(f"[~] Rate limited ({resp.status}) on {url.split('/')[-1]}, retrying...")
+                resp.raise_for_status()
             return False
 
     async def download_page(self, session, media_id, page_num, ext, temp_path):
@@ -218,6 +221,13 @@ class Nhentai2PDF:
                 for p in processed_img_files[1:]:
                     images.append(Image.open(p))
                 
+                if os.path.exists(final_filename):
+                    try:
+                        os.remove(final_filename)
+                        print(f"[*] Overwriting existing file: {os.path.basename(final_filename)}")
+                    except OSError as e:
+                        print(f"[!] Target file exists but is locked/cannot be overwritten: {e}")
+                        
                 first_img.save(
                     final_filename, 
                     save_all=True, 
@@ -265,4 +275,4 @@ class Nhentai2PDF:
         print("=" * 60)
         return True
 
-
+
