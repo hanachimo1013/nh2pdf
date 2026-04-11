@@ -183,9 +183,16 @@ class Nhentai2PDF:
         final_filename = os.path.join(self.output_dir, f"{code}_[{self._sanitize(data['artist'])}]_{data['safe_title']}.pdf")
         
         img_files = []
-        for f in sorted(os.listdir(temp_path)):
-            if f.lower().endswith(('.jpg', '.png', '.webp', '.gif')):
+        for f in os.listdir(temp_path):
+            if re.match(r'^\d+\.(jpg|png|webp|gif)$', f.lower()):
                 img_files.append(os.path.join(temp_path, f))
+
+        # Strict integer sorting based on the numeric portion of the file name
+        try:
+            img_files.sort(key=lambda x: int(re.search(r'(\d+)\.', os.path.basename(x)).group(1)))
+        except Exception as e:
+            print(f"[!] Warning: Strict sorting failed, falling back to basic sort. Error: {e}")
+            img_files.sort()
 
         print(f"[*] Normalizing and Compiling (1600x2260)...")
         TARGET_W, TARGET_H = 1600, 2260 
@@ -216,7 +223,7 @@ class Nhentai2PDF:
             images = []
             first_img = None
             try:
-                processed_img_files.sort()
+                # 'processed_img_files' is built sequentially from strictly-ordered 'img_files'
                 first_img = Image.open(processed_img_files[0])
                 for p in processed_img_files[1:]:
                     images.append(Image.open(p))
